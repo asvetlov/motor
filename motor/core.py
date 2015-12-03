@@ -606,43 +606,13 @@ class AgnosticReplicaSetClient(AgnosticClientBase):
         # 'MotorClient' that create_class_with_framework created.
         super(self.__class__, self).__init__(io_loop, *args, **kwargs)
 
+    @motor_coroutine
     def open(self, callback=None):
-        """Connect to the server.
-
-        Takes an optional callback, or returns a Future that resolves to
-        ``self`` when opened. This is convenient for checking at program
-        startup time whether you can connect.
-
-        .. Not a doctest: don't require a replica set for doctests to pass.
-
-        .. code-block:: python
-
-          >>> from tornado.ioloop import IOLoop
-          >>> from motor.motor_tornado import MotorReplicaSetClient
-          >>> uri = 'mongodb://localhost:27017/?replicaSet=rs'
-          >>> client = MotorReplicaSetClient(uri)
-          >>> # run_sync() returns the open client.
-          >>> IOLoop.current().run_sync(client.open)
-          MotorReplicaSetClient(MongoReplicaSetClient(['localhost:27017', ...]))
-
-        ``open`` raises a :exc:`~pymongo.errors.ConnectionFailure` if it
-        cannot connect, but note that auth failures aren't revealed until
-        you attempt an operation on the open client.
-
-        :Parameters:
-         - `callback`: Optional function taking parameters (self, error)
-
-        .. versionchanged:: 0.2
-           :class:`MotorReplicaSetClient` now opens itself on demand, calling
-           ``open`` explicitly is now optional.
-        """
-        loop = self.get_io_loop()
-        future = self._framework.get_future(loop)
-        retval = self._framework.future_or_callback(future, callback, loop)
-        connected_callback = functools.partial(self._connected_callback,
-                                               future)
-        self._ensure_connected(sync=True, callback=connected_callback)
-        return retval
+        yield self._framework.yieldable(self._ensure_connected(True))
+        primary = self._get_member()
+        if not primary:
+            raise pymongo.errors.AutoReconnect('no primary is available')
+        self._framework.return_value(self)
 
     def _connected_callback(self, future, result, error):
         if error:
