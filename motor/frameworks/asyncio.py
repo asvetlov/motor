@@ -48,6 +48,11 @@ def get_future(loop):
     return asyncio.Future(loop=loop)
 
 
+def return_value(value):
+    # In Python 3.3, StopIteration can accept a value.
+    raise StopIteration(value)
+
+
 _DEFAULT = object()
 
 
